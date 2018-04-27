@@ -22,6 +22,7 @@ r"""
 Leap related functionality
 """
 
+
 __revision__ = "$Id$"
 
 
@@ -66,12 +67,14 @@ class Leap(object):
         self.force_fields.add(ff)
 
 
-    def generate_init(self):
-        leap_cmds = []
+    def generate_init(self, addcmd, addcmd2, additional_bond_lines = []):
+        leap_cmds = ['logfile leap.log']
 
         for ff in self.force_fields:
             leap_cmds.append('source "leaprc.%s"' % ff)
 
+        leap_cmds.append(addcmd)
+        leap_cmds.append(addcmd2)
         leap_cmds.append(self.solvents)
 
         for up in self.user_params:
@@ -116,5 +119,8 @@ class Leap(object):
             mol_cnt += 1
 
         leap_cmds.append('s = combine {%s}\n' % (' '.join(mnames)))
+
+        for line in additional_bond_lines:
+            leap_cmds.append(line + "\n")
 
         return '\n'.join(leap_cmds)

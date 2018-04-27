@@ -210,7 +210,7 @@ if _fmcs_imp == 'c++':
     _params = dict(maximizeBonds = False, threshold = 1.0,
                    verbose = False, matchValences = False,
                    ringMatchesRingOnly = True, completeRingsOnly = True,
-                   bondCompare = BondCompare.CompareAny)
+                   bondCompare = BondCompare.CompareOrder)
 else:
     from rdkit.Chem.MCS import FindMCS
 
@@ -259,7 +259,9 @@ def mcss(mol2str_1, mol2str_2, maxtime=60, isotope_map=None, selec=''):
     _params.update(timeout = int(maxtime) )
 
     # FIXME: test c++ implementation
+    customized_mapping = False
     if isotope_map:
+        customized_mapping = {}
         if _fmcs_imp == 'c++':
             _params.update(atomCompare = AtomCompare.CompareIsotopes)
         else:
@@ -267,12 +269,20 @@ def mcss(mol2str_1, mol2str_2, maxtime=60, isotope_map=None, selec=''):
 
         max_idx1 = mol1.GetNumAtoms()
         max_idx2 = mol2.GetNumAtoms()
+        #first set the initial atom isotope to large number and distinguish mol1 and mol2
+        for mol_index, mol in enumerate([mol1, mol2]):
+            max_idx = mol.GetNumAtoms()
+            for i in range (max_idx):
+                atom1 = mol.GetAtomWithIdx(i)
+                #assume that we have maximum 300 atoms in the mol
+                atom1.SetIsotope(atom1.GetAtomicNum() * 300 + mol_index + 1)
 
         icnt = 0
 
         # NOTE: would it make sense to have multiple atoms of a molecule tagged
         #       as the same isotope?
         for idx1, idx2 in isotope_map.iteritems():
+            customized_mapping [idx1-1] = idx2-1
             icnt += 1
 
             logger.write('Mapping atom index %i to %i' % (idx1, idx2) )
@@ -295,7 +305,18 @@ def mcss(mol2str_1, mol2str_2, maxtime=60, isotope_map=None, selec=''):
                 atom2.SetIsotope(icnt)
     else:
         if _fmcs_imp == 'c++':
-            _params.update(atomCompare = AtomCompare.CompareAny)
+            #_params.update(atomCompare = AtomCompare.CompareAny)
+            #_params.update(atomCompare = AtomCompare.CompareElements)
+            # change to customized element map
+            _params.update(atomCompare = AtomCompare.CompareIsotopes)
+            for mol in [mol1, mol2]:
+                for i in range (mol.GetNumAtoms()):
+                    atom1 = mol.GetAtomWithIdx(i)
+                    if not atom1.IsInRing():
+                        atom1.SetIsotope (atom1.GetAtomicNum() -1)
+                    else:
+                        #set all ring atoms same to C
+                        atom1.SetIsotope ( 5 )
         else:
             _params.update(atomCompare = 'any')
 
@@ -355,7 +376,6 @@ def mcss(mol2str_1, mol2str_2, maxtime=60, isotope_map=None, selec=''):
 
         logger.write('Applying spatially-closest algorithm (%s, %s matches)\n' %
                      (len(m1), len(m2) ) )
-
 
         # FIXME: is it possible that the smaller one has more then one matches
         #        when uniquify=True?
@@ -435,6 +455,8 @@ def mcss(mol2str_1, mol2str_2, maxtime=60, isotope_map=None, selec=''):
         m2 = mol2.GetSubstructMatch(p)
 
         mapping = dict(zip(m1, m2) )
+        if customized_mapping:
+            mapping = customized_mapping
 
     # FIXME: we may have to reconsider this and understand when rings have
     #        to be assumed "broken"

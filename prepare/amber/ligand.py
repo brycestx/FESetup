@@ -69,6 +69,7 @@ GB_MAX_ITER = 20
 GB_MAX_CHARGE = 0.001                   # FIXME: this may be problematic
 
 GB_LEAP_IN = '''\
+logFile leap.log
 source leaprc.gaff
 set default PBRadii mbondi2
 mods = loadAmberParams "%s"
@@ -539,6 +540,23 @@ class Ligand(Common):
         self.ref_file = self.mol_file
         self.ref_fmt = self.mol_fmt
 
+    @report
+    def param_resp(self):
+        """
+        Compute RESP charges
+        """
+
+        logger.write('Deriving AMBER/GAFF force field parameters with RESP charges')
+
+        from ligand_resp import ligand_resp
+
+        ligand_resp(self.mol_file, self.mol_fmt, 
+                    const.LIGAND_AC_FILE, 'ac', self.charge)
+
+        self._parmchk(const.LIGAND_AC_FILE, 'ac', self.frcmod)
+
+        self.ref_file = self.mol_file
+        self.ref_fmt = self.mol_fmt
 
     def _parmchk(self, infile, informat, outfile):
         """

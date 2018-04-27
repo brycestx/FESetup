@@ -25,7 +25,7 @@ object.  The class can create an AMBER topology file for the complex.
 """
 
 
-__revision__ = "$Id$"
+__revision__ = "$Id: complex.py 580 2016-05-13 08:24:28Z halx $"
 
 
 
@@ -46,7 +46,8 @@ class Complex(Common):
 
     SSBONDS_OFFSET = 1
 
-    def __init__(self, protein, ligand):
+
+    def __init__(self, protein, ligands):
         """
         :param protein: the protein for complex composition
         :type protein: Protein or string
@@ -55,77 +56,114 @@ class Complex(Common):
         :raises: SetupError
         """
 
+        if type(ligands) is not list:
+            ligands = [ligands]
+
         self.leap_added = False
+        self.additional_bond_lines = []
 
         # FIXME: remove when ModelConfig is done
         #        this is still used for the Morph class
-        if type(protein) == str and type(ligand) == str:
+        if type(protein) == str and type(ligands[0]) == str:
             super(Complex, self).__init__(protein + const.PROT_LIG_SEP +
-                                          ligand)
+                                          ligands[0])
 
             self.protein_file = protein
-            self.ligand_file = ligand
+            self.ligand_files = ligands
+            self.ligands = [[] for i in range(len(ligands))]
 
             # FIXME: quick fix to allow dGprep to redo complex morph
-            self.ligand = Ligand(ligand, '')
+            for i in range(len(ligands)):
+                self.ligands[i] = Ligand(ligands[i], '')
 
             return
 
         assert type(protein) == Protein
-        assert type(ligand) == Ligand
+        assert type(ligands) == list
+        assert type(ligands[0]) == Ligand
 
-        self.complex_name = protein.mol_name + const.PROT_LIG_SEP + \
-                            ligand.mol_name
+        self.complex_name = protein.mol_name + const.PROT_LIG_SEP
+        for i in range(len(ligands)):
+            self.complex_name += ligands[i].mol_name
+            if i < len(ligands)-1:
+                self.complex_name += const.PROT_LIG_SEP
 
         super(Complex, self).__init__(self.complex_name)
 
-        self.ligand_file = ligand.orig_file
+        self.ligand_files = [[] for i in range(len(ligands))]
         self.protein_file = protein.orig_file
-        self.charge = protein.charge + ligand.charge
+        self.charge = protein.charge
 
         if abs(self.charge) > const.TINY_CHARGE:
             logger.write('Warning: non-zero complex charge (%f)' % self.charge)
 
         self.protein = protein
-        self.ligand = ligand
-        self.frcmod = self.ligand.frcmod
+        self.ligands = ligands
+        self.frcmods = [[] for i in range(len(ligands))]
+        for i in range(len(ligands)):
+            self.frcmods[i] = os.getcwd() + "/" + const.LIGAND_WORKDIR + "/" + ligands[i].mol_name + "/" + ligands[i].frcmod
+            self.ligand_files[i] = ligands[i].orig_file
+            self.charge += ligands[i].charge
+
+
+
+    def getResidueIndex(self, protein, residue):
+        res_list = []
+        name_set = set()
+        for atom in protein.GetAtoms():
+            name = oe.OEAtomGetResidue(atom).GetResidueNumber()
+            if name not in name_set:
+                name_set.add(name)
+                res_list.append(name)
+        res_list.sort()
+        res_map = {}
+        for i in range(len(res_list)):
+            res_map[res_list[i]] = i+1
+        return res_map[residue.GetResidueNumber()]
 
 
     @report
-    def prepare_top(self, gaff='gaff', pert=None, add_frcmods=[]):
+    def prepare_top(self, gaff='gaff', pert=None, add_frcmods=[], generate_zinc_bonds = False):
         """
         Prepare for parmtop creation i.e. add molecules to Leap structure.
         This needs to be run before create_top() to ensure that the molecule
         has been added but also to not trigger parmtop generation to early.
         Pmemd needs to have a second molecule added in alchemical free
         energy setups.
+        :param generate_zinc_bonds: determine whether or not we should automatically create bond between Histidine-coordinated Zincs and the ligands
         """
 
-        # ensure ligand is in MOL2/GAFF format
-        if os.access(const.LIGAND_AC_FILE, os.F_OK):
-            mol_file = const.GAFF_MOL2_FILE
-            antechamber = utils.check_amber('antechamber')
-            utils.run_amber(antechamber,
-                            '-i %s -fi ac -o %s -fo mol2 -j 1 -at %s -pf y' %
-                            (const.LIGAND_AC_FILE, mol_file, gaff) )
-            self.ligand_fmt = 'mol2'
-        else:
-            # antechamber has trouble with dummy atoms
-            mol_file = self.ligand_file
+            # ensure ligand is in MOL2/GAFF format
+            lig = self.ligands[i]
+            ac = os.getcwd() + "/../../" + const.LIGAND_WORKDIR + "/" + lig.mol_name + "/" + const.LIGAND_AC_FILE
+            if os.access(ac, os.F_OK):
 
-            if self.ligand_fmt != 'mol2' and self.ligand_fmt != 'pdb':
-                raise errors.SetupError('unsupported leap input format: %s ('
-                                        'only mol2 and pdb)' % self.ligand_fmt)
+                mol_file = os.getcwd() + "/../../" + const.LIGAND_WORKDIR + "/" + lig.mol_name + "/" + const.GAFF_MOL2_FILE
+                #frc = const.LIGAND_WORKDIR/lig.mol_name/lig.frcmod
 
+                antechamber = utils.check_amber('antechamber')
+                utils.run_amber(antechamber,
+                                '-i %s -fi ac -o %s -fo mol2 -j 1 -at %s -pf y' %
+                                (ac, mol_file, gaff) )
+                self.ligand_fmt = 'mol2'
+            else:
+                # antechamber has trouble with dummy atoms
+                mol_file = self.ligand_files[i]
 
-        frcmods = [self.frcmod]
+                if self.ligand_fmt != 'mol2' and self.ligand_fmt != 'pdb':
+                    raise errors.SetupError('unsupported leap input format: %s ('
+                                            'only mol2 and pdb)' % self.ligand_fmt)
 
-        if add_frcmods:
-            frcmods.extend(add_frcmods)
+            if i == 0:
+                frcmods = self.frcmods
+                if add_frcmods:
+                    frcmods.extend(add_frcmods)
 
-        if not self.leap_added:
-            self.leap.add_force_field(gaff)
-            self.leap.add_mol(mol_file, self.ligand_fmt, frcmods, pert=pert)
+            if not self.leap_added:
+                print("  adding ligand '" + lig.mol_name + "' to complex")
+                if i == 0:
+                    self.leap.add_force_field(gaff)
+                self.leap.add_mol(mol_file, self.ligand_fmt, frcmods, pert=pert)
 
 
     @report
@@ -156,15 +194,24 @@ class Complex(Common):
             self.leap.add_mol(self.protein_file, 'pdb')
             self.leap_added = True
 
-        # FIXME: there can be problems with the ordering of commands, e.g.
-        #        when tip4pew is used the frcmod files are only loaded after
-        #        reading PDB and MOL2
-        leapin = self._amber_top_common(boxtype, boxlength,
-                                        neutralize, align=align,
-                                        remove_first=remove_first,
-                                        conc=conc, dens=dens)
+        if os.access('ffgen_leap.in', os.F_OK) and read_ffgen:
+            self.amber_top = 'solvated.parm7'
+            self.amber_crd = 'solvated.rst7'
+            self.sander_crd = 'solvated.rst7'
+            utils.run_leap(self.amber_top, self.amber_crd, program = 'tleap',
+                           script = 'ffgen_leap.in')
+        else:
 
-        utils.run_leap(self.amber_top, self.amber_crd, 'tleap', leapin)
+            # FIXME: there can be problems with the ordering of commands, e.g.
+            #        when tip4pew is used the frcmod files are only loaded after
+            #        reading PDB and MOL2
+            leapin = self._amber_top_common(boxtype, boxlength,
+                                            neutralize, addcmd,
+                                            addcmd2, align=align,
+                                            remove_first=remove_first,
+                                            conc=conc, dens=dens, additional_bond_lines=self.additional_bond_lines)
+
+            utils.run_leap(self.amber_top, self.amber_crd, 'tleap', leapin)
 
 
     @report
@@ -198,8 +245,9 @@ class Complex(Common):
             molecule = molecules.molecule(moleculeNumber).molecule()
             moleculeList.append(molecule)
 
-        ligand = moleculeList[0]
-        not_ligand = moleculeList[1:]
+        id_first_nonligand = len(self.ligands)
+        ligands = moleculeList[0:id_first_nonligand]
+        not_ligand = moleculeList[id_first_nonligand:]
 
         sc_bb_residues = []
 
@@ -236,20 +284,21 @@ class Complex(Common):
 
                         rescoords = resat.property('coordinates')
 
-                        #for ligat in ligand.atoms():
-                        nligatoms = ligand.nAtoms()
-                        for y in range(0,nligatoms):
-                            ligat = ligand.atoms()[y]
+                        for ligand in ligands:
+                            #for ligat in ligand.atoms():
+                            nligatoms = ligand.nAtoms()
+                            for y in range(0,nligatoms):
+                                ligat = ligand.atoms()[y]
 
-                            if (ligat.property('mass').value() <
-                                const.MAX_HYDROGEN_MASS):
-                                continue
+                                if (ligat.property('mass').value() <
+                                    const.MAX_HYDROGEN_MASS):
+                                    continue
 
-                            ligcoords = ligat.property('coordinates')
-                            dist2 = space.calcDist2(rescoords, ligcoords)
+                                ligcoords = ligat.property('coordinates')
+                                dist2 = space.calcDist2(rescoords, ligcoords)
 
-                            if dist2 < shortest_dist2:
-                                shortest_dist2 = dist2
+                                if dist2 < shortest_dist2:
+                                    shortest_dist2 = dist2
 
                     if shortest_dist2 < cut2:
                         cut_residues.append(residue)

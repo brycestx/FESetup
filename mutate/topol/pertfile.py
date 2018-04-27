@@ -206,7 +206,7 @@ class PertTopology(object):
         # prepared
         com = self.ff.Complex(pdb_file, mol2)
         com.box_dims = boxdims
-        com.frcmod = self.frcmod
+        com.frcmods = [self.frcmod]
         com.ligand_fmt = 'mol2'
         com.prepare_top(gaff=self.gaff)
         com.create_top(boxtype='set', addcmd=cmd1 + cmd2)

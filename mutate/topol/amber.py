@@ -215,11 +215,11 @@ COMMON_TEMPLATE = '''TI/FEP, NpT, {title}
  ! please adjust namelist parameters to your needs!
 
  ! parameters for general MD
- imin = 0, nstlim = 500000, irest = %%R1%%, ntx = %%R2%%, dt = {dt},
+ imin = 0, nstlim = {steps}, irest = %%R1%%, ntx = %%R2%%, dt = {dt},
  ntt = 3, temp0 = 298.0, gamma_ln = 2.0, ig = -1,
  ntb = {ntb},
  {press},
- ntwe = 10000, ntwx = 10000, ntpr = 500, ntwr = 50000, ntave = 50000,
+ ntwe = 1000, ntwx = 1000, ntpr = 1000, ntwr = 50000, ntave = 50000,
  ioutfm = 1, iwrap = {wrap}, ntxo = 2,
 
  ! parameters for alchemical free energy simulation
@@ -227,7 +227,7 @@ COMMON_TEMPLATE = '''TI/FEP, NpT, {title}
  noshakemask = '{noshakemask}',
 
  icfe = 1, ifsc = {ifsc}, clambda = %%L%%, scalpha = 0.5, scbeta = 12.0,
- ifmbar = 1, bar_intervall = 500, bar_l_min = 0.0, bar_l_max = 1.0,
+ ifmbar = 0, bar_intervall = 500, bar_l_min = 0.0, bar_l_max = 1.0,
  bar_l_incr = 0.1,   ! ntpr = bar_intervall for alchemical analysis tool
 
  %s
@@ -269,6 +269,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
     dummies1 = False
     ifsc = 1
     dt = 0.002
+    steps = 500000
 
     for iinfo, finfo in atom_map.items():
         # FIXME: also set noshakemask if dt is set to smaller value
@@ -278,6 +279,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
 
             if (el0 == 'H' and el1 != 'H') or (el1 == 'H' and el0 != 'H'):
                 dt = 0.001
+                steps = 1000000
 
         # we should never have a dummy to dummy mapping
         if not iinfo.atom:
@@ -297,7 +299,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
         wrap = 0
     else:
         ntb = 2
-        press = 'ntp = 1, barostat = 1, pres0 = 1.01325, taup = 2.0'
+        press = 'ntp = 1, barostat = 2, pres0 = 1.01325, taup = 2.0'
         wrap = 1
 
     add_str0 = ''
@@ -336,7 +338,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(ONESTEP_MDIN % '', mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title=title,
+                        title=title, steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         timask1=':1', timask2=':2',
                         noshakemask=':1,2', crgmask='', ifsc=ifsc,
@@ -350,7 +352,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
                 with open(filen, mode) as stfile:
                     stfile.write(
                         tmpl.format(
-                            title=title,
+                            title=title, steps=steps,
                             dt=dt, ntb=ntb, press=press, wrap=wrap,
                             noshakemask=':1',
                             crgmask='', ifsc=ifsc,
@@ -403,7 +405,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(step1_filename % '' , mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title=title1,
+                        title=title1, steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         timask1=':1', timask2=':2',
                         noshakemask=':1,2', crgmask='', ifsc=ifsc1,
@@ -412,7 +414,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(step2_filename % '', mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title=title2,
+                        title=title2, steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         timask1=':1', timask2=':2',
                         noshakemask=':1,2', crgmask='', ifsc=ifsc2,
@@ -423,7 +425,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(step1_filename % '_a' , mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title=title1 + ', step a',
+                        title=title1 + ', step a', steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         noshakemask=':1', crgmask='',
                         ifsc=ifsc1, scmask=m0))
@@ -431,7 +433,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(step1_filename % '_b' , mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title=title1 + ', step b',
+                        title=title1 + ', step b', steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         noshakemask=':1', crgmask='',
                         ifsc=ifsc1, scmask=m1.replace(':2', ':1', 1)))
@@ -446,7 +448,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(step2_filename % '_a', mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title=title2 + ', step a',
+                        title=title2 + ', step a', steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         noshakemask=':1', crgmask='',
                         ifsc=ifsc2, scmask=m2))
@@ -454,7 +456,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(step2_filename % '_b', mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title=title2 + ', step b',
+                        title=title2 + ', step b', steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         noshakemask=':1', crgmask='',
                         ifsc=ifsc2, scmask=m3.replace(':2', ':1', 1)))
@@ -483,29 +485,30 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(DECHARGE_MDIN % '', mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title='decharge transformation',
+                        title='decharge transformation', steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         timask1=':1', timask2=':2',
-                        crgmask=':2', noshakemask=':1,2',
+                        crgmask=':2@%s' % mask_str0, noshakemask=':1,2',
                         ifsc=0, scmask1='', scmask2=''))
 
             with open(VDW_MDIN % '', mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title='vdW+bonded transformation',
+                        title='vdW+bonded transformation', steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         timask1=':1', timask2=':2',
-                        crgmask=':1,2', noshakemask=':1,2', ifsc=ifsc,
+                        crgmask=':1@%s | :2@%s' % (mask_str0, mask_str1),
+                        noshakemask=':1,2', ifsc=ifsc,
                         scmask1=':1@%s' % mask_str0 + add_str0,
                         scmask2=':2@%s' % mask_str1 + add_str1))
 
             with open(RECHARGE_MDIN % '', mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title='recharge transformation',
+                        title='recharge transformation', steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         timask1=':1', timask2=':2',
-                        crgmask=':1', noshakemask=':1,2',
+                        crgmask=':1@%s' % mask_str1, noshakemask=':1,2',
                         ifsc=0, scmask1='', scmask2=''))
         else:
             tmpl = COMMON_TEMPLATE % SANDER_TEMPLATE
@@ -513,7 +516,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(DECHARGE_MDIN % '_a', mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title='decharge transformation, step a',
+                        title='decharge transformation, step a', steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         crgmask='', noshakemask=':1',
                         ifsc=0, scmask=''))
@@ -521,7 +524,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(DECHARGE_MDIN % '_b', mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title='decharge transformation, step b',
+                        title='decharge transformation, step b', steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         crgmask=':1', noshakemask=':1',
                         ifsc=0, scmask=''))
@@ -536,7 +539,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(VDW_MDIN % '_a', mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title='vdW+bonded transformation, step a',
+                        title='vdW+bonded transformation, step a', steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         crgmask=':1', noshakemask=':1',
                         ifsc=ifsc, scmask=':1@%s' % mask_str0 + add_str0))
@@ -544,7 +547,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(VDW_MDIN % '_b', mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title='vdW+bonded transformation, step b',
+                        title='vdW+bonded transformation, step b', steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         crgmask=':1', noshakemask=':1',
                         ifsc=ifsc, scmask=':1@%s' % mask_str1 + add_str1))
@@ -558,7 +561,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(RECHARGE_MDIN % '_a', mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title='recharge transformation, step a',
+                        title='recharge transformation, step a', steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         crgmask=':1', noshakemask=':1',
                         ifsc=0, scmask=''))
@@ -566,7 +569,7 @@ def write_mdin(atoms_initial, atoms_final, atom_map, prog, style='', vac=True):
             with open(RECHARGE_MDIN % '_b', mode) as stfile:
                 stfile.write(
                     tmpl.format(
-                        title='recharge transformation, step b',
+                        title='recharge transformation, step b', steps=steps,
                         dt=dt, ntb=ntb, press=press, wrap=wrap,
                         crgmask='', noshakemask=':1',
                         ifsc=0, scmask=''))

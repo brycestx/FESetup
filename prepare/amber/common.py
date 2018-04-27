@@ -194,7 +194,8 @@ class Common(object):
 
 
     def _amber_top_common(self, boxtype='', boxlength='10.0', neutralize=0,
-                          align=None, remove_first=False, conc=0.0, dens=1.0):
+                          addcmd='', addcmd2='', align=None, remove_first=False,
+                          conc=0.0, dens=1.0, additional_bond_lines = []):
         """Common scripting commands for leap.  Internal function only.
 
         :param boxtype: rectangular, octahedron or set
@@ -214,7 +215,7 @@ class Common(object):
         :raises: SetupError
         """
 
-        leapin = self.leap.generate_init()
+        leapin = self.leap.generate_init(addcmd, addcmd2, additional_bond_lines)
 
         if os.access(const.SSBOND_FILE, os.R_OK):
             pairs = ssbonds(const.SSBOND_FILE, self.__class__.SSBONDS_OFFSET)
@@ -269,7 +270,7 @@ class Common(object):
 
             # add explicit number of ions because leap just truncates the int!
             if self.charge < 0.0:
-                leapin += 'addIons s Na+ %i\n' % nions
+                leapin += 'addIons s K+ %i\n' % nions
             elif self.charge > 0.0:
                 leapin += 'addIons s Cl- %i\n' % nions
         elif neutralize == 2:           # neutralise to set concentration
@@ -302,7 +303,7 @@ class Common(object):
                          (self.volume , self.density, self.charge, npos,
                           nneg) )
 
-            leapin += 'addIonsRand s Na+ %i Cl- %i 2.0\n' % (npos, nneg)
+            leapin += 'addIonsRand s K+ %i Cl- %i 2.0\n' % (npos, nneg)
 
 
         leapin += ('saveAmberParm s "%s" "%s"\nsavepdb s "%s"\n' %
@@ -365,7 +366,7 @@ class Common(object):
 
     @report
     def md(self, namelist = '', nsteps = 1000, T = 300.0, p = 1.0,
-           restraint = '', restr_force = 10.0, nrestr = 1, wrap = True):
+           restraint = '', restr_force = 10.0, nrestr = 1, wrap = True, start_temp=0):
         """
         Use the sander module from AMBER to run molecular dynamics on a system.
 
@@ -398,7 +399,7 @@ class Common(object):
 
         # FIXME: clean up nrestr to be consistent between MD programs
         self.mdengine.md(namelist, nsteps, T, p, restraint, restr_force,
-                         nrestr, wrap)
+                         nrestr, wrap, dt=0.002, start_temp=start_temp)
 
         # FIXME: do we also want to density?
         self.box_dims = self.mdengine.get_box_dims()

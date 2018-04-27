@@ -283,7 +283,7 @@ class PertTopology(object):
         com.__class__.SSBONDS_OFFSET = 2 # FIXME: kludge
         com.box_dims = boxdims
         com.ligand_fmt = 'mol2'
-        com.frcmod = self.frcmod0
+        com.frcmods = [self.frcmod0]
 
         if self.FE_sub_type == 'softcore' or self.FE_sub_type == 'dummy':
             com._parm_overwrite = 'onestep'
@@ -325,7 +325,7 @@ class PertTopology(object):
             com.__class__.SSBONDS_OFFSET = 2 # FIXME: kludge
             com.box_dims = boxdims
             com.ligand_fmt = 'mol2'
-            com.frcmod = self.frcmod0
+            com.frcmods = [self.frcmod0]
 
             if self.dummies0:
                 com._parm_overwrite = 'vdw'
@@ -344,7 +344,7 @@ class PertTopology(object):
             com.__class__.SSBONDS_OFFSET = 2 # FIXME: kludge
             com.box_dims = boxdims
             com.ligand_fmt = 'mol2'
-            com.frcmod = self.frcmod1
+            com.frcmods = [self.frcmod1]
 
             if self.dummies1:
                 com._parm_overwrite = 'vdw'
@@ -365,7 +365,7 @@ class PertTopology(object):
             com.__class__.SSBONDS_OFFSET = 2 # FIXME: kludge
             com.box_dims = boxdims
             com.ligand_fmt = 'mol2'
-            com.frcmod = self.frcmod0
+            com.frcmods = [self.frcmod0]
             com._parm_overwrite = 'decharge'
 
             com.prepare_top(gaff=self.gaff, pert=pert0)
@@ -376,7 +376,7 @@ class PertTopology(object):
             com.__class__.SSBONDS_OFFSET = 2 # FIXME: kludge
             com.box_dims = boxdims
             com.ligand_fmt = 'mol2'
-            com.frcmod = self.frcmod1
+            com.frcmods = [self.frcmod1]
             com._parm_overwrite = 'recharge'
 
             com.prepare_top(gaff=self.gaff, pert=pert1)

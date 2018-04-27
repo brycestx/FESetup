@@ -21,7 +21,7 @@ r"""
 MD engine base
 """
 
-__revision__ = "$Id$"
+__revision__ = "$Id: mdebase.py 590 2016-05-13 20:58:09Z halx $"
 
 
 
@@ -50,7 +50,8 @@ _restraint_table = {
     'protein': ':' + ','.join(const.AMBER_PROTEIN_RESIDUES),
     'nucleic': ':' + ','.join(const.AMBER_NUCLEIC_RESIDUES),
     'notligand': '!:' + const.LIGAND_NAME,
-    'notsolvent': '!:WAT,HOH,T3P,T4P'
+    #'notsolvent': '!:WAT,HOH,T3P,T4P'
+    'notsolvent': '!:WAT,HOH,OPC,TD14,TD15,TD16,T3P,T4P'
     }
 
 

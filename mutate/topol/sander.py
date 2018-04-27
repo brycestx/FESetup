@@ -258,7 +258,7 @@ class PertTopology(object):
         com0 = self.ff.Complex(pdb_file, mol2_0)
         com0.box_dims = boxdims
         com0.ligand_fmt = 'mol2'
-        com0.frcmod = self.frcmod0
+        com0.frcmods = [self.frcmod0]
 
         com0._parm_overwrite = 'state0'
         com0.ligand_fmt = 'mol2'
@@ -277,7 +277,7 @@ class PertTopology(object):
         com1 = self.ff.Complex(pdb_file, mol2_1)
         com1.box_dims = boxdims
         com1.ligand_fmt = 'mol2'
-        com1.frcmod = self.frcmod1
+        com1.frcmods = [self.frcmod1]
 
         com1._parm_overwrite = 'state1'
 
@@ -290,7 +290,7 @@ class PertTopology(object):
 
         if self.FE_sub_type == 'softcore2' or self.FE_sub_type == 'dummy2':
             ow_add = '_int'
-            
+
             if self.FE_sub_type == 'dummy2':
                 f = True
             else:
@@ -305,7 +305,7 @@ class PertTopology(object):
             com = self.ff.Complex(pdb_file, mol2_int)
             com.box_dims = boxdims
             com.ligand_fmt = 'mol2'
-            com.frcmod = self.frcmod1
+            com.frcmods = [self.frcmod1]
             com._parm_overwrite = 'state_int'
             com.prepare_top(add_frcmods=[self.frcmod0])
             com.create_top(boxtype='set', addcmd=cmd1 + cmd2)
@@ -331,7 +331,7 @@ class PertTopology(object):
             com = self.ff.Complex(pdb_file, mol2_int)
             com.box_dims = boxdims
             com.ligand_fmt = 'mol2'
-            com.frcmod = self.frcmod1
+            com.frcmods = [self.frcmod1]
             com._parm_overwrite = 'state_int'
 
             if pert1_info:

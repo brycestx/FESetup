@@ -75,7 +75,7 @@ def ob_read_one(conv, filen, mol, ifmt, ofmt):
             raise errors.SetupError(txt + 'check if file/format is valid')
 
     return mol, conv
-
+    
 
 ### imported methods ###
 @report
@@ -100,7 +100,7 @@ def prepare(self, to_format = 'mol2', addH = False, calc_charge = False,
     :type pH: float
     :raises: SetupError
     """
-
+    
     conv = ob.OBConversion()
     mol = ob.OBMol()
     ob_read_one(conv, self.mol_file, mol, self.mol_fmt, to_format)
@@ -197,7 +197,6 @@ def prepare(self, to_format = 'mol2', addH = False, calc_charge = False,
         self.charge = mol.GetTotalCharge()  # trust Openbabel...
 
     self.atomtype = 'sybyl'     # Openbabel will try to convert to Sybyl format
-
     conv.SetOutFormat('smi')
     conv.AddOption('n')
     conv.AddOption('c')

@@ -21,7 +21,7 @@ r"""
 Amber MD engine: sander or pmemd
 """
 
-__revision__ = "$Id$"
+__revision__ = "$Id: amber.py 558 2016-04-29 08:09:51Z halx $"
 
 
 
@@ -135,7 +135,7 @@ class MDEngine(mdebase.MDEBase):
 
 
     def md(self, namelist='', nsteps=1000, T=300.0, p=1.0,
-           restr_str='', restr_force=5.0, nrel=1, wrap=True, dt=0.002):
+           restr_str='', restr_force=5.0, nrel=1, wrap=True, dt=0.002, start_temp=0):
         """
         Use the sander module from AMBER to run molecular dynamics on a system.
 
@@ -170,6 +170,33 @@ class MDEngine(mdebase.MDEBase):
             if pname == 'PRESS' or pname == 'SHRINK':
                 constp = True
 
+            if pname == 'HEATPRESS':
+
+                restraint = ''
+
+                if restr_str:
+                    try:
+                        mask = mdebase._restraint_table[restr_str]
+                    except KeyError:
+                        mask = restr_str
+
+                    restraint = (mdebase._rs % (restr_force, mask) )
+
+                import numpy as np
+                heat_namelist = PROTOCOLS['MD_HEATNEW']
+                press_namelist = PROTOCOLS['MD_PRESS']
+                for temp0 in np.linspace(10, 300, 59):
+                    namelist = heat_namelist.format(nsteps, nsteps/5, nsteps/10,
+                                                    self.md_periodic+restraint,
+                                                    '{:d}'.format(wrap), temp0, p, dt, temp0-5) 
+                    self._run_mdprog(mdebase.MD_PREFIX, namelist, mask, False)
+
+                    namelist = press_namelist.format(nsteps, nsteps/5, nsteps/10,
+                                                     self.md_periodic+restraint,
+                                                     '{:d}'.format(wrap), temp0, p, dt)                    
+                    self._run_mdprog(mdebase.MD_PREFIX, namelist, mask, True)
+                return
+
             try:
                 namelist = PROTOCOLS['MD_%s' % pname]
             except KeyError:
@@ -185,11 +212,10 @@ class MDEngine(mdebase.MDEBase):
                     mask = restr_str
 
                 restraint = (mdebase._rs % (restr_force, mask) )
-
+            
             namelist = namelist.format(nsteps, nsteps / 5, nsteps / 10,
                                        self.md_periodic + restraint,
-                                       '{:d}'.format(wrap), T, p, dt)
-
+                                       '{:d}'.format(wrap), T, p, dt, start_temp)
 
         self._run_mdprog(mdebase.MD_PREFIX, namelist, mask, constp)
 
@@ -277,7 +303,7 @@ PROTOCOLS = dict(
    ntpr = {2}, ntwe = {2},
    dx0 = 1.0D-7,
    ntxo = 1,  ! 2 is default in AMBER16 for NetCDF file
-   ntc = 2, noshakemask = '!:WAT,HOH,T3P,T4P,T4E',
+   ntc = 2, noshakemask = '!:WAT,HOH,T3P,T4P,T4E,OPC,TD14,TD15,TD16',
    {3}
  /
 ''',
@@ -287,7 +313,7 @@ PROTOCOLS = dict(
    imin = 1, ntmin = 1,
    maxcyc = {0}, ncyc = {1},
    ntpr = {2}, ntwe = {2},
-   dx0 = 1.0D-7,
+   dx0 = 0.005, drms = 1.0,
    ntxo = 1,  ! 2 is default in AMBER16 for NetCDF file
    {3}
  /
@@ -323,9 +349,9 @@ PROTOCOLS = dict(
 # we may later want to add ntxo = 2, i.e. restart file in NetCDF format
     MD_HEAT = '''heat the system
  &cntrl
-   imin = 0, nstlim = {0}, irest = 0, ntx = 1, dt = {7},
-   nmropt = 1,
-   ntt = 1, temp0 = {5}, tempi = 5.0, tautp = 1.0,
+   imin = 0, nstlim = {0}, irest = 0, ntx = 1, dt = 0.001,
+   gamma_ln = 2, cut = 8.0,
+   ntt = 3, temp0 = {5}, tempi = 5.0, tautp = 1.0,
    ntb = 1, pres0 = {6},
    ntc = 2, ntf = 2,
    ioutfm = 1, iwrap = {4},
@@ -337,9 +363,48 @@ PROTOCOLS = dict(
  &wt
    type = 'TEMP0',
    istep1 = 0, istep2 = {0},                                      
-   value1 = 5.0, value2 = 300.0
+   value1 = 5.0, value2 = {5}
  /
 
+ &wt type = 'END'
+ /
+''',
+
+    MD_HEATNEW = '''heat the system
+ &cntrl
+   imin = 0, nstlim = {0}, irest = 0, ntx = 1, dt = 0.001,
+   gamma_ln = 2, cut = 8.0,
+   ntt = 3, temp0 = {5}, tempi = {8}, tautp = 1.0,
+   ntb = 1, pres0 = {6},
+   ntc = 2, ntf = 2,
+   ioutfm = 1, iwrap = {4},
+   ntxo = 1,  ! 2 is default in AMBER16 for NetCDF file
+   ntwe = {1}, ntwx = {1}, ntpr = {2},
+   {3}
+ /
+
+ &wt
+   type = 'TEMP0',
+   istep1 = 0, istep2 = {0},                                      
+   value1 = {8}, value2 = {5}
+ /
+
+ &wt type = 'END'
+ /
+''',
+
+    MD_HEATSTEP = '''heat the system
+ &cntrl
+   imin = 0, nstlim = {0}, irest = 0, ntx = 1, dt = {7},
+   nmropt = 1,
+   ntt = 1, temp0 = {5}, tempi = {8}, tautp = 1.0,
+   ntb = 1, pres0 = {6},
+   ntc = 2, ntf = 2,
+   ioutfm = 1, iwrap = {4},
+   ntxo = 1,  ! 2 is default in AMBER16 for NetCDF file
+   ntwe = {1}, ntwx = {1}, ntpr = {2},
+   {3}
+ /
  &wt type = 'END'
  /
 ''',
@@ -360,11 +425,11 @@ PROTOCOLS = dict(
 # FIXME: isotropic pressure scaling only
     MD_PRESS = '''constant pressure
  &cntrl
-   imin = 0, nstlim = {0}, irest = 1, ntx = 5, dt = {7},
-   ntt = 1, temp0 = {5}, tautp = 1.0,
+   imin = 0, nstlim = {0}, irest = 1, ntx = 5, dt = 0.001,
+   ntt = 3, temp0 = {5}, tautp = 1.0,
    ntp = 1, pres0 = {6}, taup = 0.5,
-   ntb = 2,
-   ntc = 2, ntf = 2,
+   ntb = 2, gamma_ln = 2, cut = 8.0,
+   ntc = 2, ntf = 2, barostat = 2,
    ioutfm = 1, iwrap = {4},
    ntwe = {1}, ntwx = {1}, ntpr = {2},
    ntxo = 1,  ! 2 is default in AMBER16 for NetCDF file

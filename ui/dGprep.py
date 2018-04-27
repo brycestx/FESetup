@@ -79,6 +79,7 @@ SECT_COM = 'complex'
 ALL_SECTIONS = (SECT_DEF, SECT_LIG, SECT_PROT, SECT_COM)
 
 PARAM_CMDS = {
+    'prepi': 'loadAmberPrep',
     'frcmod': 'loadAmberParams',
     'prep': 'loadAmberPrep',
     'lib': 'loadOff'
@@ -454,6 +455,13 @@ def make_ligand(name, ff, opts):
                 restr_force = lig['md.heat.restr_force']
                 do_md(ligand, lig, 'heat')
 
+            nsteps = lig['md.heatpress.nsteps']
+
+            if nsteps > 0:
+                restr_force = lig['md.heatpress.restr_force']
+                do_md(ligand, lig, 'heatpress')
+                press_done = True
+
             nsteps = lig['md.constT.nsteps']
 
             if nsteps > 0:
@@ -569,13 +577,13 @@ def make_protein(name, ff, opts):
     with DirManager(workdir):
         if from_scratch:
             protein.copy_files((src,), None, opts[SECT_DEF]['overwrite'])
-
+	    print(load_cmds)
             if prot['propka']:
                 protein.protonate_propka(pH = prot['propka.pH'])
 
             protein.get_charge()    # must be done explicitly
             protein.prepare_top()
-            protein.create_top(boxtype = '')
+            protein.create_top(boxtype = '', addcmd = load_cmds)
 
             model['charge.total'] = protein.charge
             model['forcefield'] = 'AMBER'    # FIXME
@@ -671,7 +679,12 @@ def make_complex(prot, lig, ff, opts, load_cmds):
 
     com = opts[SECT_COM]
 
-    name = prot.mol_name + const.PROT_LIG_SEP + lig.mol_name
+    name = prot.mol_name + const.PROT_LIG_SEP
+    for i in range(len(ligands)):
+        name += ligands[i].mol_name
+        if i < len(ligands)-1:
+           name += const.PROT_LIG_SEP
+
     vac_model_filename = name + const.MODEL_EXT
     sol_model_filename = 'solv_' + name + const.MODEL_EXT
     from_scratch = True
@@ -691,7 +704,7 @@ def make_complex(prot, lig, ff, opts, load_cmds):
             # FIXME: only extract when const.COMPLEX_WORKDIR not present?
             model.extract(direc = workdir)
 
-            complex = ff.Complex(prot, lig)
+            complex = ff.Complex(prot, ligands)
 
             complex.charge = float(model['charge.total'])
             complex.amber_top = model['top.filename']
@@ -708,15 +721,15 @@ def make_complex(prot, lig, ff, opts, load_cmds):
             else:
                 return complex, load_cmds
 
-    print('Making complex from %s and %s...' % (prot.mol_name, lig.mol_name))
+    print('Making complex from %s and %s...' % (prot.mol_name, ligands[0].mol_name))
 
     if from_scratch:
         model = ModelConfig(name)
 
     if not model_path:
-        complex = ff.Complex(prot, lig)
+        complex = ff.Complex(prot, ligands)
 
-    lig_src = os.path.join(os.getcwd(), const.LIGAND_WORKDIR, lig.mol_name)
+    lig_src = os.path.join(os.getcwd(), const.LIGAND_WORKDIR, ligands[0].mol_name)
     prot_src = os.path.join(os.getcwd(), const.PROTEIN_WORKDIR, prot.mol_name)
 
     with DirManager(workdir):
@@ -773,11 +786,37 @@ def make_complex(prot, lig, ff, opts, load_cmds):
 
             #complex.md('%SHRINK', 200, 5.0, 1.0, 'bb_lig', 5.0, wrap = True)
 
+            ## If desired, run stepwise Equilibaration
+            target_temp = com['md.stepwiseEquil.T']
+            if target_temp > 0:
+                print('--- Will now run stepwise equilibration of %s: ------' % complex.complex_name)
+                stepwidth = com['md.stepwiseEquil.stepwidth']
+                step_temp = 5
+                while step_temp <= target_temp:
+                    
+                    print('  Heating to %sK' % step_temp)  
+                    complex.md(namelist='%HEATSTEP', nsteps=com['md.stepwiseEquil.heat_nsteps'], T=step_temp,p=1.0, restraint=com['md.stepwiseEquil.heat_restraint'], restr_force=com['md.stepwiseEquil.heat_restr_force'], start_temp=step_temp-stepwidth)
+                    
+                    print('  Runnning NPT at %sK' % step_temp)
+                    complex.md(namelist='%PRESS', nsteps=com['md.stepwiseEquil.press_nsteps'], T=step_temp,p=com['md.stepwiseEquil.press_p'], restraint=com['md.stepwiseEquil.press_restraint'], restr_force=com['md.stepwiseEquil.press_restr_force'])
+                    
+                    step_temp += stepwidth
+                    
+                print('--- finished stepwise equilibration ---')
+
+
             nsteps = com['md.heat.nsteps']
 
             if nsteps > 0:
                 restr_force = com['md.heat.restr_force']
                 do_md(complex, com, 'heat')
+
+            nsteps = com['md.heatpress.nsteps']
+
+            if nsteps > 0:
+                restr_force = com['md.heatpress.restr_force']
+                do_md(complex, com, 'heatpress')
+                press_done = True
 
             nsteps = com['md.constT.nsteps']
 
@@ -919,6 +958,8 @@ defaults[SECT_COM] = {
     'min.ncyc': (10, (int, ) ),
     'min.restraint': ('notsolvent', None),
     'min.restr_force': (10.0, (float, ) ),
+    'ligand_pairs': ('', ('list', LIST_SEP) ),
+    'generate_zinc_bonds': (False, ('bool', ) )
     }
 
 _minmd = {
@@ -931,6 +972,13 @@ _minmd = {
     'md.heat.p': (1.0, (float, ) ),
     'md.heat.restraint': ('notsolvent', None),
     'md.heat.restr_force': (10.0, (float, ) ),
+
+    'md.heatpress.nsteps': (0, (int, ) ),
+    'md.heatpress.T': (300.0, (float, ) ),
+    'md.heatpress.p': (1.0, (float, ) ),
+    'md.heatpress.restraint': ('notsolvent', None),
+    'md.heatpress.restr_force': (10.0, (float, ) ),
+
     'md.constT.nsteps': (0, (int, ) ),
     'md.constT.T': (300.0, (float, ) ),
     'md.constT.p': (1.0, (float, ) ),
@@ -945,7 +993,16 @@ _minmd = {
     'md.relax.nsteps': (0, (int, ) ),
     'md.relax.T': (300.0, (float, ) ),
     'md.relax.p': (1.0, (float, ) ),
-    'md.relax.restraint': ('notsolvent', None)
+    'md.relax.restraint': ('notsolvent', None),
+    'md.stepwiseEquil.T': (0.0, (float, ) ),
+    'md.stepwiseEquil.stepwidth': (5.0, (float, ) ),
+    'md.stepwiseEquil.heat_restraint': ('notsolvent', None),
+    'md.stepwiseEquil.heat_restr_force': (10.0, (float, ) ),
+    'md.stepwiseEquil.heat_nsteps': (300, (int, ) ),
+    'md.stepwiseEquil.press_restraint': ('notsolvent', None),
+    'md.stepwiseEquil.press_restr_force': (10.0, (float, ) ),
+    'md.stepwiseEquil.press_p': (1.0, (float, ) ),
+    'md.stepwiseEquil.press_nsteps': (300, (int, ) ),
 }
 
 defaults[SECT_LIG].update(_minmd)
@@ -964,6 +1021,7 @@ if __name__ == '__main__':
                         help='full version information')
     parser.add_argument('--tracebacklimit', metavar='N', type=int, default=0,
                         help='set the Python traceback limit (for debugging)')
+    parser.add_argument('-l', default=0, help='ligand sd file')
     args = parser.parse_args()
 
     print('\n=== %s ===\n\n%s\n' % (vstring, istring))
@@ -1133,6 +1191,25 @@ if __name__ == '__main__':
 
     complexes = {}
     com_failed = []
+    paired_ligands = {}
+    processed_ligands = set()
+
+    # In case of multiple simultaneous ligands, load info about ligand pairs
+    if 'ligand_pairs' in options[SECT_COM]:
+        list_of_pairs = options[SECT_COM]['ligand_pairs']
+        for pair in list_of_pairs:
+            namelist = pair.split(":")
+            liglist = []
+            for name in namelist:
+                if name not in ligands:
+                    print("[Error:] Ligand '" + name + "' specified as part of a ligand pair, but no ligand with this name was loaded. Please make sure to also load a ligand with this name!")
+                    sys.exit(1)
+
+                liglist.append(ligands[name].ref)
+            for i in range(len(namelist)):
+                if namelist[i] not in paired_ligands:
+                    paired_ligands[namelist[i]] = liglist
+
 
     # NOTE: does a complex for individual ligands need to be built when
     #       complex morphs are requested?
@@ -1143,6 +1220,11 @@ if __name__ == '__main__':
             continue
 
         for lig_name in ligands:
+
+            # Do not build a complex with the same ligand again.
+            if lig_name in processed_ligands:
+                continue
+
             if lig_name in lig_failed:
                 print ('WARNING: not making complex with ligand %s '
                        'because build failed' % lig_name)
@@ -1174,7 +1256,7 @@ if __name__ == '__main__':
                     # NOTE: no real need here to limit the list of complexes
                     #       as it is checked again below
                     for pair in morph_pairs:
-                        if complex.ligand.mol_name == pair[0]:
+                        if complex.ligands[0].mol_name == pair[0]:
                             complexes[complex] = cmds
                 except errors.SetupError as why:
                     com_failed.append(name)
@@ -1193,7 +1275,7 @@ if __name__ == '__main__':
             name = complex.mol_name + '/' + morph.name
 
             # FIXME: Complex has no ligand component after restart
-            if complex.ligand.mol_name == morph.initial_name:
+            if complex.ligands[0].mol_name == morph.initial_name:
                 print('Creating complex %s with ligand morph %s...' %
                       (complex.mol_name, morph.name) )
 

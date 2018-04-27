@@ -156,7 +156,8 @@ class Protein(Common):
             return
 
         leapin = self._amber_top_common(boxtype, boxlength,
-                                        neutralize, align=align,
+                                        neutralize, addcmd,
+                                        addcmd2, align=align,
                                         remove_first = False,
                                         conc=conc, dens=dens)
 
